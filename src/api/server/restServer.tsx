@@ -16,7 +16,6 @@ import { MinerServer } from "../../miner/minerServer"
 import { INetwork } from "../../network/inetwork"
 import * as proto from "../../serialization/proto"
 import { Hash } from "../../util/hash"
-import { Ledger } from "../../wallet/ledger"
 import { Wallet } from "../../wallet/wallet"
 import { IBlock, ICreateWallet, IHyconWallet, IMinedInfo, IMiner, IPeer, IResponseError, IRest, ITxProp, IUser, IWalletAddress } from "../client/rest"
 import { hyconfromString, hycontoString, zeroPad } from "../client/stringUtil"
@@ -970,72 +969,8 @@ export class RestServer implements IRest {
         }
     }
 
-    public async getLedgerWallet(startIndex: number, count: number): Promise<IHyconWallet[] | number> {
-        try {
-            const addresses = await Ledger.getAddresses(startIndex, count)
-            const wallets: IHyconWallet[] = []
-            for (const address of addresses) {
-                const account = await this.consensus.getAccount(address)
-                const pendings = this.txPool.getTxsOfAddress(address)
-                let pendingAmount = Long.fromNumber(0)
-                for (const pending of pendings) {
-                    pendingAmount = pendingAmount.add(pending.amount).add(pending.fee)
-                }
-                wallets.push({
-                    address: address.toString(),
-                    balance: account ? hycontoString(account.balance) : "0",
-                    pendingAmount: hycontoString(pendingAmount),
-                })
-            }
-            return wallets
-        } catch (e) {
-            logger.error(`Fail to getLedgerWallet in restServer : ${e}`)
-            return 1
-        }
-    }
-
-    public async sendTxWithLedger(index: number, from: string, to: string, amount: string, fee: string, queueTx?: Function): Promise<{ res: boolean, case?: number }> {
-        let caseNum = 0
-        try {
-            const fromAddress = new Address(from)
-            caseNum = 1
-            const toAddress = new Address(to)
-            caseNum = 2
-            const account = await this.consensus.getAccount(fromAddress)
-            let balance = account.balance
-
-            const pendings = this.txPool.getTxsOfAddress(fromAddress)
-            let nonce: number
-            if (pendings.length > 0) {
-                nonce = pendings[pendings.length - 1].nonce + 1
-            } else {
-                nonce = account.nonce + 1
-            }
-            caseNum = 3
-
-            const totalAmount = Long.fromNumber(0, true)
-            for (const pending of pendings) {
-                totalAmount.add(pending.amount).add(pending.fee)
-            }
-            balance = balance.sub(totalAmount)
-
-            logger.warn(`${index} Ledger Wallet Balance: ${account.balance} / Pending Amount : ${totalAmount} /  Available : ${balance}`)
-            logger.warn(`TX Amount: ${amount}`)
-            logger.warn(`TX Miner Fee: ${fee}`)
-
-            const signedTx = await Ledger.sign(toAddress, hyconfromString(amount), nonce, hyconfromString(fee), index)
-            caseNum = 4
-            if (queueTx) { queueTx(signedTx) } else { return { res: false, case: caseNum } }
-            caseNum = 5
-            return { res: true, case: caseNum }
-        } catch (e) {
-            logger.warn(`Fail to sendTxWithLedger : ${e}`)
-            return { res: false, case: caseNum }
-        }
-    }
-
     public possibilityLedger(): Promise<boolean> {
-        return Promise.resolve(true)
+        return Promise.resolve(false)
     }
 
     public async getMarketCap(): Promise<{ amount: string }> {

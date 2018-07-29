@@ -156,8 +156,6 @@ export interface IRest {
     addFavorite(alias: string, address: string): Promise<boolean>
     deleteFavorite(alias: string): Promise<boolean>
     addWalletFile(name: string, password: string, key: string): Promise<boolean>
-    getLedgerWallet(startIndex: number, count: number): Promise<IHyconWallet[] | number>
-    sendTxWithLedger(index: number, from: string, to: string, amount: string, fee: string, queueTx?: Function): Promise<{ res: boolean, case?: number }>
     possibilityLedger(): Promise<boolean>
     getMarketCap(): Promise<{ amount: string }>
 }
