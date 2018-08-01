@@ -154,11 +154,12 @@ export class RestServer implements IRest {
             try {
                 const address = new Address(tx.to)
                 const wallet = new Wallet(Buffer.from(tx.privateKey, "hex"))
-                const account = await this.consensus.getAccount(new Address(wallet.pubKey.address()))
+                const from = new Address(wallet.pubKey.address())
+                const account = await this.consensus.getAccount(from)
                 let nonce = tx.nonce
                 if (nonce === undefined) {
                     nonce = account.nonce + 1
-                    const pendingTxs = this.txPool.getTxsOfAddress(address)
+                    const pendingTxs = this.txPool.getTxsOfAddress(from)
                     for (const pendingTx of pendingTxs) {
                         if (nonce <= pendingTx.nonce) {
                             nonce = pendingTx.nonce + 1
@@ -195,45 +196,47 @@ export class RestServer implements IRest {
     }
 
     public async outgoingTx(tx: { signature: string, from: string, to: string, amount: string, fee: string, nonce: number, recovery: number }): Promise<{ txHash?: string } | IResponseError> {
-        try {
-            const address = {
-                from: new Address(tx.from),
-                to: new Address(tx.to),
-                amount: hyconfromString(tx.amount),
-                fee: hyconfromString(tx.fee),
-                nonce: tx.nonce,
-            }
-            let signedTx = new SignedTx(address, Buffer.from(tx.signature, "hex"), tx.recovery | 0)
-            if (!signedTx.verify()) {
-                tx.recovery = undefined
-                tx.signature = undefined
-                signedTx = new SignedTx(address, Buffer.from(tx.signature, "hex"), tx.recovery ^ 1)
+        return this.txNonceLock.critical(async () => {
+            try {
+                const address = {
+                    from: new Address(tx.from),
+                    to: new Address(tx.to),
+                    amount: hyconfromString(tx.amount),
+                    fee: hyconfromString(tx.fee),
+                    nonce: tx.nonce,
+                }
+                let signedTx = new SignedTx(address, Buffer.from(tx.signature, "hex"), tx.recovery | 0)
                 if (!signedTx.verify()) {
-                    throw new Error("transaction information or signature is incorrect")
+                    tx.recovery = undefined
+                    tx.signature = undefined
+                    signedTx = new SignedTx(address, Buffer.from(tx.signature, "hex"), tx.recovery ^ 1)
+                    if (!signedTx.verify()) {
+                        throw new Error("transaction information or signature is incorrect")
+                    }
+                }
+                const account = await this.consensus.getAccount(new Address(tx.from))
+                const total = hyconfromString(tx.amount).add(hyconfromString(tx.fee))
+                if (account.balance.lessThan(total)) {
+                    throw new Error("insufficient wallet balance to send transaction")
+                }
+                const txHash = new Hash(signedTx).toString()
+                logger.info(`Sending TX ${txHash} {from: ${signedTx.from}, to: ${signedTx.to}, amount: ${signedTx.amount}, fee: ${signedTx.fee}, nonce: ${signedTx.nonce}}`)
+                const newTxs = await this.txPool.putTxs([signedTx])
+                if (newTxs.some((x) => x.equals(signedTx))) {
+                    this.network.broadcastTxs(newTxs)
+                    return { txHash }
+                } else {
+                    return {}
+                }
+            } catch (e) {
+                return {
+                    status: 404,
+                    timestamp: Date.now(),
+                    error: "INVALID_PARAMETER",
+                    message: e.toString(),
                 }
             }
-            const account = await this.consensus.getAccount(new Address(tx.from))
-            const total = hyconfromString(tx.amount).add(hyconfromString(tx.fee))
-            if (account.balance.lessThan(total)) {
-                throw new Error("insufficient wallet balance to send transaction")
-            }
-            const txHash = new Hash(signedTx).toString()
-            logger.info(`Sending TX ${txHash} {from: ${signedTx.from}, to: ${signedTx.to}, amount: ${signedTx.amount}, fee: ${signedTx.fee}, nonce: ${signedTx.nonce}}`)
-            const newTxs = await this.txPool.putTxs([signedTx])
-            if (newTxs.some((x) => x.equals(signedTx))) {
-                this.network.broadcastTxs(newTxs)
-                return { txHash }
-            } else {
-                return {}
-            }
-        } catch (e) {
-            return {
-                status: 404,
-                timestamp: Date.now(),
-                error: "INVALID_PARAMETER",
-                message: e.toString(),
-            }
-        }
+        })
     }
 
     public async deleteWallet(name: string): Promise<boolean> {
