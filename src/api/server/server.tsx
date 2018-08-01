@@ -156,9 +156,6 @@ export class HttpServer {
                         amount: req.body.amount,
                         fee: req.body.fee,
                         nonce: req.body.nonce,
-                    }, async (tx: SignedTx) => {
-                        const newTxs = await this.hyconServer.txQueue.putTxs([tx])
-                        this.hyconServer.broadcastTxs(newTxs)
                     }),
                 )
             })
@@ -269,9 +266,6 @@ export class HttpServer {
                     fee: req.body.fee,
                     nonce: req.body.nonce,
                     recovery: req.body.recovery,
-                }, async (tx: SignedTx) => {
-                    const newTxs = await this.hyconServer.txQueue.putTxs([tx])
-                    this.hyconServer.broadcastTxs(newTxs)
                 }),
             )
         })

@@ -118,8 +118,8 @@ export interface IRest {
     getWalletBalance(address: string): Promise<{ balance: string } | IResponseError>
     getWalletTransactions(address: string, nonce?: number): Promise<{ txs: ITxProp[] } | IResponseError>
 
-    outgoingSignedTx(tx: { privateKey: string, to: string, amount: string, fee: string, nonce: number }, queueTx?: Function): Promise<{ txHash: string } | IResponseError>
-    outgoingTx(tx: { signature: string, from: string, to: string, amount: string, fee: string, nonce: number, recovery: number }, queueTx?: Function): Promise<{ txHash: string } | IResponseError>
+    outgoingSignedTx(tx: { privateKey: string, to: string, amount: string, fee: string, nonce: number }): Promise<{ txHash?: string } | IResponseError>
+    outgoingTx(tx: { signature: string, from: string, to: string, amount: string, fee: string, nonce: number, recovery: number }): Promise<{ txHash?: string } | IResponseError>
 
     // tslint:disable:adjacent-overload-signatures
     // BlockExplorer

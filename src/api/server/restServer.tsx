@@ -149,7 +149,7 @@ export class RestServer implements IRest {
         }
     }
 
-    public async outgoingSignedTx(tx: { privateKey: string, to: string, amount: string, fee: string, nonce?: number }, queueTx?: Function): Promise<{ txHash: string } | IResponseError> {
+    public async outgoingSignedTx(tx: { privateKey: string, to: string, amount: string, fee: string, nonce?: number }): Promise<{ txHash?: string } | IResponseError> {
         return this.txNonceLock.critical(async () => {
             try {
                 const address = new Address(tx.to)
@@ -174,13 +174,14 @@ export class RestServer implements IRest {
                 }
                 const signedTx = wallet.send(address, hyconfromString(tx.amount.toString()), nonce, hyconfromString(tx.fee.toString()))
                 const txHash = new Hash(signedTx).toString()
-                if (queueTx) {
-                    logger.info(`Sending TX ${txHash} {from: ${signedTx.from}, to: ${signedTx.to}, amount: ${signedTx.amount}, fee: ${signedTx.fee}, nonce: ${signedTx.nonce}}`)
-                    queueTx(signedTx)
+                logger.info(`Sending TX ${txHash} {from: ${signedTx.from}, to: ${signedTx.to}, amount: ${signedTx.amount}, fee: ${signedTx.fee}, nonce: ${signedTx.nonce}}`)
+                const newTxs = await this.txPool.putTxs([signedTx])
+                if (newTxs.some((x) => x.equals(signedTx))) {
+                    this.network.broadcastTxs(newTxs)
+                    return { txHash }
                 } else {
-                    throw new Error("could not queue transaction")
+                    return {}
                 }
-                return { txHash }
             } catch (e) {
                 return {
                     status: 404,
@@ -193,7 +194,7 @@ export class RestServer implements IRest {
         })
     }
 
-    public async outgoingTx(tx: { signature: string, from: string, to: string, amount: string, fee: string, nonce: number, recovery: number }, queueTx?: Function): Promise<{ txHash: string } | IResponseError> {
+    public async outgoingTx(tx: { signature: string, from: string, to: string, amount: string, fee: string, nonce: number, recovery: number }): Promise<{ txHash?: string } | IResponseError> {
         try {
             const address = {
                 from: new Address(tx.from),
@@ -216,21 +217,22 @@ export class RestServer implements IRest {
             if (account.balance.lessThan(total)) {
                 throw new Error("insufficient wallet balance to send transaction")
             }
-            if (queueTx) {
-                await queueTx(signedTx)
+            const txHash = new Hash(signedTx).toString()
+            logger.info(`Sending TX ${txHash} {from: ${signedTx.from}, to: ${signedTx.to}, amount: ${signedTx.amount}, fee: ${signedTx.fee}, nonce: ${signedTx.nonce}}`)
+            const newTxs = await this.txPool.putTxs([signedTx])
+            if (newTxs.some((x) => x.equals(signedTx))) {
+                this.network.broadcastTxs(newTxs)
+                return { txHash }
             } else {
-                throw new Error("could not queue transaction")
+                return {}
             }
-            return Promise.resolve({
-                txHash: new Hash(signedTx).toString(),
-            })
         } catch (e) {
-            return Promise.resolve({
+            return {
                 status: 404,
                 timestamp: Date.now(),
                 error: "INVALID_PARAMETER",
                 message: e.toString(),
-            })
+            }
         }
     }
 
