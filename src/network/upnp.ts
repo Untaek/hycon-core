@@ -8,7 +8,7 @@ export class UpnpServer {
 
     public static port: number
     public static product: string = "hycon"
-    public static networkid: string = "1"
+    public static networkid: string = "100"
     public static version: string = "1.0.0"
 
     constructor(port: number) {

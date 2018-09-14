@@ -34,7 +34,7 @@ export class Server {
       [nickname])
 
     if (dupl.length > 0) {
-      return false
+      return true
     }
   }
 
@@ -42,39 +42,16 @@ export class Server {
     try {
       await this.db.singleQuery('INSERT INTO address (address, name) VALUES (?, ?)', [address, nickname])
     } catch (e) {
-      return false
+      throw false
     }
   }
 
   private route(): Express.Router {
     const router = Express.Router()
 
-    router.post('/wallet/recover', async (req, res) => {
-      const password = req.body.password
-      const nickname = req.body.nickname
-      const mnemonic = req.body.mnemonic
-
-      if (await this.dupleNickname(nickname)) {
-        res.json({ error: "nickname duplicated" })
-      }
-
-      const params = {
-        name: nickname,
-        mnemonic,
-        language: "english",
-        password: password
-      }
-
-      request.post(`${this.apiUrl}/recoverWallet`, { body: params, json: true }, (err, resp, body) => {
-        if (err) res.json({ error: 'recover error' })
-        res.json({ address: body })
-      })
-    })
-
-
     router.post('/wallet', async (req, res) => {
-      const password = req.body.password
-      const nickname = req.body.nickname
+      const password: string = req.body.password
+      const nickname: string = req.body.nickname
 
       if (await this.dupleNickname(nickname)) {
         console.log("nickname duplicated")
@@ -91,6 +68,28 @@ export class Server {
             privateKey: Wallet.encryptAES(String(password), String(resp.data.privateKey))
           })
         })
+    })
+
+    router.post('/wallet/recover', async (req, res) => {
+      const password = req.body.password
+      const nickname = req.body.nickname
+      const mnemonic = req.body.mnemonic
+
+      if (await this.dupleNickname(nickname)) {
+        res.json({ error: "nickname duplicated" })
+        return
+      }
+
+      const basic = await axios.post(`${this.apiUrl}/wallet`, { mnemonic: mnemonic })
+      const privateKey = Wallet.encryptAES(String(password), String(basic.data.privateKey))
+      const address = basic.data.address
+
+      await this.saveAddress(nickname, address)
+
+      res.json({
+        privateKey: privateKey,
+        address: address
+      })
     })
 
     router.get('/wallet/:address', async (req, res) => {
@@ -125,14 +124,14 @@ export class Server {
 
     router.post('/tx', async (req, res) => {
       console.log(req.body.privateKey)
+      const privateKey = Wallet.decryptAES(String(req.body.password), Buffer.from(String(":" + req.body.privateKey)))
+      console.log(privateKey)
       axios.post(`${this.apiUrl}/signedtx`, {
-        body: {
-          to: req.body.to,
-          amount: req.body.amount,
-          fee: req.body.fee,
-          nonce: req.body.nonce,
-          privateKey: Wallet.decryptAES(String(req.body.password), Buffer.from(String(":" + req.body.privateKey)))
-        }
+        to: req.body.to,
+        amount: req.body.amount,
+        fee: req.body.fee,
+        nonce: req.body.nonce,
+        privateKey: privateKey
       }).then(data => {
         res.json(data.data)
       }).catch(e => {
@@ -143,15 +142,19 @@ export class Server {
     router.get('/wallet/:address/txs', async (req, res) => {
       const address = req.params.address
 
-      request.get(`${this.apiUrl}/wallet/${address}/txs`, {}, (err, resp, body) => {
-        if (err) {
+      axios.get(`${this.apiUrl}/wallet/${address}/txs`)
+        .then(data => {
+          if (data.data.status) {
+            res.json([])
+          }
+          else {
+            res.json(data.data)
+          }
+        })
+        .catch(e => {
           res.json({ error: "get txs fail" })
-          return
-        }
-        res.json(body)
-      })
+        })
     })
-
     return router
   }
 

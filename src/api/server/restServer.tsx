@@ -151,11 +151,15 @@ export class RestServer implements IRest {
     }
 
     public async outgoingSignedTx(tx: { privateKey: string, to: string, amount: string, fee: string, nonce?: number }, queueTx?: Function): Promise<{ txHash: string } | IResponseError> {
+        console.log("privateKey" + tx.privateKey)
         return this.txNonceLock.critical(async () => {
             try {
                 const address = new Address(tx.to)
+                console.log("address" + address)
                 const wallet = new Wallet(Buffer.from(tx.privateKey, "hex"))
+                console.log("wallet" + wallet)
                 const account = await this.consensus.getAccount(new Address(wallet.pubKey.address()))
+                console.log(account)
                 let nonce = tx.nonce
                 if (nonce === undefined) {
                     nonce = account.nonce + 1
@@ -167,6 +171,7 @@ export class RestServer implements IRest {
                     }
                 }
                 const total = hyconfromString(tx.amount).add(hyconfromString(tx.fee))
+                console.log(total)
                 logger.debug(`Total HYC: ${hycontoString(total)}`)
                 logger.debug(`Account Balance: ${hycontoString(account.balance)}`)
                 logger.debug(`Boolean: ${account.balance.lessThan(total)}`)
@@ -668,7 +673,7 @@ export class RestServer implements IRest {
             if (isValid) {
                 try {
                     let password = Hwallet.password
-                    let passphrase = Hwallet.passphrase
+                    let passphrase = Hwallet.passphraseWallet.decryptAES(String(req.body.password), Buffer.from(String(":" + req.body.privateKey)))
                     let hint = Hwallet.hint
                     if (Hwallet.password === undefined) { password = "" }
                     if (Hwallet.passphrase === undefined) { passphrase = "" }
