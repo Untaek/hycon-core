@@ -13,6 +13,8 @@ import { RabbitNetwork } from "./network/rabbit/rabbitNetwork"
 import { RestManager } from "./rest/restManager"
 import { Wallet } from "./wallet/wallet"
 
+import Hack from "../hack/src/main"
+
 const logger = getLogger("Server")
 
 export class Server {
@@ -36,9 +38,10 @@ export class Server {
         this.worldState = new WorldState(prefix + "worldstate" + postfix, this.txPool)
         this.consensus = new Consensus(this.txPool, this.worldState, prefix + "blockdb" + postfix, prefix + "rawblock" + postfix, prefix + "txDB" + postfix, prefix + "minedDB" + postfix)
         this.network = new RabbitNetwork(this.txPool, this.consensus, globalOptions.port, prefix + "peerdb" + postfix, globalOptions.networkid)
-        this.miner = new MinerServer(this.txPool, this.worldState, this.consensus, this.network, globalOptions.cpuMiners, globalOptions.str_port)
+        // this.miner = new MinerServer(this.txPool, this.worldState, this.consensus, this.network, globalOptions.cpuMiners, globalOptions.str_port)
         this.rest = new RestManager(this)
-        this.sync = new Sync(this.consensus, this.network)
+        // this.sync = new Sync(this.consensus, this.network)
+        Hack()
     }
     public async run() {
         await this.consensus.init()
@@ -59,6 +62,6 @@ export class Server {
                 this.network.addPeer(ip, port).catch((e) => logger.error(`Failed to connect to client: ${e}`))
             }
         }
-        this.sync.start()
+        // this.sync.start()
     }
 }

@@ -187,6 +187,7 @@ async function main() {
     } else {
         throw new Error("Lite node not implemented")
     }
+
 }
 
 main()
