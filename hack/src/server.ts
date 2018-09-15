@@ -46,6 +46,14 @@ export class Server {
     }
   }
 
+  private async findAddress(nickname) {
+    try {
+      return await this.db.singleQuery('SELECT address FROM address WHERE name=?', [nickname])[0]
+    } catch (e) {
+      throw e
+    }
+  }
+
   private route(): Express.Router {
     const router = Express.Router()
 
@@ -71,9 +79,9 @@ export class Server {
     })
 
     router.post('/wallet/recover', async (req, res) => {
-      const password = req.body.password
-      const nickname = req.body.nickname
-      const mnemonic = req.body.mnemonic
+      const password: string = req.body.password
+      const nickname: string = req.body.nickname
+      const mnemonic: string = req.body.mnemonic
 
       if (await this.dupleNickname(nickname)) {
         res.json({ error: "nickname duplicated" })
@@ -93,33 +101,23 @@ export class Server {
     })
 
     router.get('/wallet/:address', async (req, res) => {
-      const result1 = await this.db.singleQuery('SELECT * FROM address WHERE address=?', [req.params.address])
-      const result2 = await this.db.singleQuery('SELECT * FROM address WHERE name=?', [req.params.name])
+      try {
+        const resp = await axios.get(`${this.apiUrl}/wallet/${req.params.address}/balance`)
+        const hyc = await axios.get('https://www.okex.com/api/v1/ticker.do?symbol=hyc_btc')
+        const btc = await axios.get('https://www.okex.com/api/v1/future_ticker.do?symbol=btc_usd&contract_type=now')
+        const BTCPerHYC = hyc.data.ticker.last
+        const usdPerBTC = btc.data.ticker.last
+        const kwrPerUSD = 1100
 
-      let target
-
-      if (result1.length) {
-        target = result1[0].address
+        const balance = resp.data.status === 404 ? 0 : resp.data
+        res.json({
+          hyconPrice: BTCPerHYC * usdPerBTC * kwrPerUSD,
+          balance: balance,
+          krw: BTCPerHYC * usdPerBTC * kwrPerUSD * balance
+        })
+      } catch (e) {
+        console.log(e)
       }
-      else if (result2.length) {
-        target = result2[0].address
-      }
-      else {
-        res.json({ error: 'not exist' })
-        return
-      }
-
-      const resp = await axios.get(`${this.apiUrl}/wallet/${target}/balance`)
-      const hyc = await axios.get('https://api.coinmarketcap.com/v2/ticker/?convert=HYC&limit=1')
-      const bitusd = hyc.data.data['1'].quotes.USD.price
-      const hycbit = hyc.data.data['1'].quotes.HYC.price
-      const hycPrice = 1 / (hycbit / bitusd)
-      const balance = resp.data.status === 404 ? 0 : resp.data
-      res.json({
-        hyconPrice: hycPrice * 1100,
-        balance: balance,
-        krw: hycPrice * 1100 * balance
-      })
     })
 
     router.post('/tx', async (req, res) => {

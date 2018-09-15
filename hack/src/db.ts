@@ -18,8 +18,9 @@ export class DB {
   }
 
   private init() {
+    //DROP TABLE IF EXISTS address;
     const query = `
-      DROP TABLE IF EXISTS address;
+      
       CREATE TABLE IF NOT EXISTS address (
         id int NOT NULL AUTO_INCREMENT,
         address varchar(33) NOT NULL,
